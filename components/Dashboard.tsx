@@ -1,3 +1,4 @@
+
 import { supabase } from "@/lib/supabase";
 import { User } from "@supabase/supabase-js";
 import React, { useEffect, useState } from "react";
@@ -12,9 +13,7 @@ interface DashboardProps {
 
 export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
     const [links, setLinks] = useState<{ created_at: string; id: number; link: string; }[]>([]);
-    const [edit, setEdit] = useState<number | null>(null);
-    const [showForm, setShowForm] = useState<boolean>(false);
-    const [currentLink, setCurrentLink] = useState<string>('');
+    const [edit, setEdit] = useState<number>(-1);
 
     const handleLogout = async () => {
         const { error } = await supabase.auth.signOut();
@@ -28,34 +27,13 @@ export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
         if (data) setLinks([...links, ...data]);
     };
 
-    const handleEdit = (index: number) => {
-        setEdit(index);
-        setCurrentLink(links[index].link);
-        setShowForm(true);
-    };
-
-    const handleFormSubmit = async () => {
-        if (edit !== null) {
-            const updatedLinks = links.map((link, index) =>
-                index === edit ? { ...link, link: currentLink } : link
-            );
-            setLinks(updatedLinks);
-
-            // Update in the database
-            const { error } = await supabase.from('links').update({ link: currentLink }).match({ id: links[edit].id });
-            if (error) console.log(error);
-
-            setShowForm(false);
-            setEdit(null);
-        }
-    };
-
     useEffect(() => {
         const getLinks = async () => {
             const { data, error } = await supabase
                 .from('links')
                 .select('*')
                 .eq('email', user?.email);
+
             if (error) console.log(error);
             if (data && data?.length > 0) setLinks(data);
         };
@@ -68,20 +46,6 @@ export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
             <h1 className="text-5xl text-emerald-200 font-bold text-center">Link Manager</h1>
             <p className="mt-4 text-emerald-200 text-center text-xl">Welcome, {user?.email}</p>
 
-            {showForm && edit !== null && (
-                <div className="edit-form-container">
-                    <h3>Edit Link</h3>
-                    <label>ID: {links[edit].id}</label>
-                    <input
-                        type="text"
-                        value={currentLink}
-                        onChange={(e) => setCurrentLink(e.target.value)}
-                    />
-                    <button onClick={handleFormSubmit}>Save</button>
-                    <button onClick={() => setShowForm(false)}>Cancel</button>
-                </div>
-            )}
-
             <div className="card-container">
                 {links.map((link, index) => (
                     <div key={link.id} className="neumorphic-card">
@@ -92,8 +56,8 @@ export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
                                 <input
                                     className="edit-input px-4 py-2 border-2 text-emerald-400 placeholder-emerald-600 bg-emerald-950 border-emerald-900 rounded-md focus:outline-none focus:ring-2 focus:border-transparent"
                                     type="text"
-                                    value={currentLink}
-                                    onChange={(e) => setCurrentLink(e.target.value)}
+                                    value={link.link}
+                                    onChange={(e) => setLinks(links.map((l, i) => i === index ? { ...l, link: e.target.value } : l))}
                                 />
                             ) : (
                                 <p>{link.link}</p>
@@ -102,16 +66,23 @@ export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
                         <div className="card-actions">
                             {edit === index ? (
                                 <React.Fragment>
-                                    <button className="save-button" onClick={handleFormSubmit}>
+                                    <button className="save-button" onClick={() => {
+                                        setEdit(-1);
+                                        const updateLink = async () => {
+                                            const { error } = await supabase.from('links').update({ link: link.link }).match({ id: link.id });
+                                            if (error) console.log(error);
+                                        };
+                                        updateLink();
+                                    }}>
                                         <SaveIcon />
                                     </button>
-                                    <button className="cancel-button" onClick={() => setEdit(null)}>
+                                    <button className="cancel-button" onClick={() => setEdit(-1)}>
                                         <DeleteIcon />
                                     </button>
                                 </React.Fragment>
                             ) : (
                                 <React.Fragment>
-                                    <button className="edit-button" onClick={() => handleEdit(index)}>
+                                    <button className="edit-button" onClick={() => setEdit(index)}>
                                         <EditIcon />
                                     </button>
                                     <button className="delete-button" onClick={() => {
@@ -131,14 +102,9 @@ export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
                 ))}
             </div>
 
-            <button
-                className="add-link-button mt-6 w-full py-3 bg-emerald-400 text-emerald-950 font-bold rounded-md focus:outline-none focus:ring-2 focus:border-transparent"
-                onClick={handleAdd}
-            >
+            <button className="add-link-button mt-6 w-full py-3 bg-emerald-400 text-emerald-950 font-bold rounded-md focus:outline-none focus:ring-2 focus:border-transparent" onClick={handleAdd}>
                 Add Link
             </button>
         </div>
     );
 }
-
-
