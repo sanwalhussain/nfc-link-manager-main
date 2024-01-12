@@ -1,0 +1,783 @@
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/gotrue-js";
+import React, { useState, useEffect } from "react";
+
+interface Link {
+    id: number;
+    link: string;
+    email: string | null;
+    cardlink: string;
+    pass: number | null;
+    created_at: string;
+}
+
+interface DashboardProps {
+    user: User;
+    setUser: React.Dispatch<React.SetStateAction<User | null>>;
+}
+
+export default function Dashboard({ user, setUser }: DashboardProps) {
+    const [links, setLinks] = useState<Link[]>([]);
+    const [edit, setEdit] = useState<number | null>(null);
+    const [deviceId, setDeviceId] = useState<string>('');
+    const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.log('Logout error:', error);
+        else setUser(null);
+    };
+
+    const handleLinkDevice = async () => {
+        if (!deviceId) {
+            setError('Device ID is required.');
+            return;
+        }
+
+        // Check if the device ID exists and is not linked to any email
+        setLoading(true);
+        setError(null);
+
+        const { data: linkedData, error: linkError } = await supabase
+            .from('links')
+            .select('*')
+            .eq('id', deviceId)
+            .is('email', null);
+
+        setLoading(false);
+
+        if (linkError) {
+            setError('Error checking device ID.');
+            console.log('Error checking device ID:', linkError);
+            return;
+        }
+
+        if (linkedData && linkedData.length > 0) {
+            // Link the device ID to the user's email
+            setLoading(true);
+
+            const { error: linkError } = await supabase
+                .from('links')
+                .update({ email: user.email })
+                .match({ id: deviceId });
+
+            setLoading(false);
+
+            if (linkError) {
+                setError('Error linking device.');
+                console.log('Error linking device:', linkError);
+            } else {
+                setError(null);
+                setLinks([...links, linkedData[0]]);
+                if (user.email) {
+                    setLinkedEmail(user.email); // Set linkedEmail to user.email after linking if user.email is defined
+                }
+            }
+        } else {
+            setError('Device ID is already linked or not found in the database.');
+        }
+    };
+
+    useEffect(() => {
+        // Fetch links associated with the user's email on component mount
+        const getLinks = async () => {
+            if (linkedEmail) {
+                setLoading(true);
+                setError(null);
+
+                const { data, error } = await supabase
+                    .from('links')
+                    .select('*')
+                    .eq('email', linkedEmail)
+                    .order('created_at', { ascending: true });
+
+                setLoading(false);
+
+                if (error) {
+                    setError('Error fetching links.');
+                    console.log('Error fetching links:', error);
+                } else {
+                    setLinks(data || []);
+                }
+            }
+        };
+
+        if (linkedEmail) {
+            getLinks();
+        }
+    }, [linkedEmail]);
+
+    return (
+        <div className="container mx-auto p-4">
+            <h1 className="text-5xl text-emerald-200 font-bold text-center">Link manager</h1>
+            <p className="mt-4 text-emerald-200 text-center text-xl">Welcome, {user?.email}</p>
+
+            <div className="flex flex-col md:flex-row items-center mt-4">
+                <input
+                    type="text"
+                    placeholder="Enter Device ID"
+                    value={deviceId}
+                    onChange={(e) => setDeviceId(e.target.value)}
+                    className="border-2 border-emerald-300 bg-emerald-800 text-white rounded px-4 py-2 mb-2 md:mb-0 md:mr-2"
+                />
+                <button
+                    onClick={handleLinkDevice}
+                    className="bg-emerald-500 text-white px-4 py-2 rounded hover:bg-emerald-600 w-full md:w-auto"
+                >
+                    Link Device
+                </button>
+            </div>
+
+            {error && <p className="text-red-500 mt-2">{error}</p>}
+
+            <button
+                onClick={handleLogout}
+                className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            >
+                Sign Out
+            </button>
+
+            <table className="w-full mt-4 border-collapse text-emerald-200">
+                <thead>
+                    <tr>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">ID</th>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">Link</th>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {links.map((link, index) => (
+                        <tr key={link.id}>
+                            <td className="border-b border-emerald-700 px-4 py-2">#{link.id}</td>
+                            <td className="border-b border-emerald-700 px-4 py-2">{link.link}</td>
+                            <td className="border-b border-emerald-700 px-4 py-2">
+                                <button
+                                    onClick={() => setEdit(edit === index ? null : index)}
+                                    className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded mr-2"
+                                >
+                                    {edit === index ? 'Save' : 'Edit'}
+                                </button>
+                                <button
+                                    onClick={() => {/* add delete functionality here */}}
+                                    className="text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded"
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+--------------
+
+get link 
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/gotrue-js";
+import React, { useState, useEffect } from "react";
+
+interface Link {
+    id: number;
+    link: string;
+    email: string | null;
+    cardlink: string;
+    pass: number | null;
+    created_at: string;
+}
+
+interface DashboardProps {
+    user: User;
+    setUser: React.Dispatch<React.SetStateAction<User | null>>;
+}
+
+export default function Dashboard({ user, setUser }: DashboardProps) {
+    const [links, setLinks] = useState<Link[]>([]);
+    const [edit, setEdit] = useState<number | null>(null);
+    const [deviceId, setDeviceId] = useState<string>('');
+
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.log('Logout error:', error);
+        else setUser(null);
+    };
+
+    const handleLinkDevice = async () => {
+        if (!deviceId) {
+            console.log('Device ID is required.');
+            return;
+        }
+
+        // Check if the device ID exists in the database
+        const { data: linkedData, error: linkError } = await supabase
+            .from('links')
+            .select('*')
+            .eq('id', deviceId);
+
+        if (linkError) {
+            console.log('Error checking device ID:', linkError);
+            return;
+        }
+
+        if (linkedData && linkedData.length > 0) {
+            // Link the device ID to the user's email
+            const { error: linkError } = await supabase
+                .from('links')
+                .update({ email: user.email })
+                .match({ id: deviceId });
+
+            if (linkError) {
+                console.log('Error linking device:', linkError);
+            } else {
+                console.log('Device linked successfully.');
+                setLinks([...links, linkedData[0]]);
+            }
+        } else {
+            console.log('Device ID not found in the database.');
+        }
+    };
+
+    useEffect(() => {
+        // Fetch links associated with the user's email on component mount
+        const getLinks = async () => {
+            const { data, error } = await supabase
+                .from('links')
+                .select('*')
+                .eq('email', user.email)
+                .order('created_at', { ascending: true });
+
+            if (error) console.log('Error fetching links:', error);
+            else setLinks(data || []);
+        };
+
+        getLinks();
+    }, [user.email]);
+
+    return (
+        <div>
+            <h1 className="text-5xl text-emerald-200 font-bold text-center">Link manager</h1>
+            <p className="mt-4 text-emerald-200 text-center text-xl">Welcome, {user?.email}</p>
+
+            <div className="flex justify-center items-center mt-4">
+                <input
+                    type="text"
+                    placeholder="Enter Device ID"
+                    value={deviceId}
+                    onChange={(e) => setDeviceId(e.target.value)}
+                    className="border-2 border-emerald-300 bg-emerald-800 text-white rounded px-4 py-2 mr-2"
+                />
+                <button
+                    onClick={handleLinkDevice}
+                    className="bg-emerald-500 text-white px-4 py-2 rounded hover:bg-emerald-600"
+                >
+                    Link Device
+                </button>
+            </div>
+
+            <button
+                onClick={handleLogout}
+                className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            >
+                Sign Out
+            </button>
+
+            <table className="w-full mt-4 border-collapse text-emerald-200">
+                <thead>
+                    <tr>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">ID</th>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">Link</th>
+                        <th className="border-b-2 border-emerald-600 px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {links.map((link, index) => (
+                        <tr key={link.id}>
+                            <td className="border-b border-emerald-700 px-4 py-2">#{link.id}</td>
+                            <td className="border-b border-emerald-700 px-4 py-2">{link.link}</td>
+                            <td className="border-b border-emerald-700 px-4 py-2">
+                                <button
+                                    onClick={() => setEdit(edit === index ? null : index)}
+                                    className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded mr-2"
+                                >
+                                    {edit === index ? 'Save' : 'Edit'}
+                                </button>
+                                <button
+                                    onClick={() => {/* add delete functionality here */}}
+                                    className="text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded"
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+-----------
+login
+
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase'; // Ensure this path is correct for your project setup
+import { User } from '@supabase/supabase-js';
+import './LoginStyles.css'; // Import your CSS file here
+
+
+interface LoginProps {
+    setUser: React.Dispatch<React.SetStateAction<null | User>>;
+}
+
+export default function Login({ setUser }: LoginProps) {
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>('');
+    const [isSignUp, setIsSignUp] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) setUser(user);
+        };
+        getUser();
+    }, [setUser]);
+
+    const handleAuthSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError(null);
+
+        const response = isSignUp
+            ? await supabase.auth.signUp({ email, password })
+            : await supabase.auth.signInWithPassword({ email, password });
+
+        if (response.error) {
+            setError(response.error.message);
+        } else if (response.data?.user) {
+            setUser(response.data.user);
+        }
+    };
+
+    const toggleView = () => {
+        setIsSignUp(!isSignUp);
+        setError(null);
+    };
+
+    return (
+        <div className="auth-container">
+            <h1 className="auth-title">{isSignUp ? "Create Account" : "Login"}</h1>
+            {error && <p className="error-message">{error}</p>}
+            <form onSubmit={handleAuthSubmit} className="auth-form">
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="auth-input"
+                />
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="auth-input"
+                />
+                <button type="submit" className="auth-submit-btn">
+                    {isSignUp ? "Sign Up" : "Login"}
+                </button>
+            </form>
+            <button onClick={toggleView} className="toggle-view-btn">
+                {isSignUp ? "Already have an account? Login" : "Don't have an account? Create one"}
+            </button>
+        </div>
+    );
+}
+---------
+
+Dashboard
+
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase'; // Ensure this path is correct for your project setup
+import { User } from '@supabase/supabase-js';
+import './LoginStyles.css'; // Import your CSS file here
+
+
+interface LoginProps {
+    setUser: React.Dispatch<React.SetStateAction<null | User>>;
+}
+
+export default function Login({ setUser }: LoginProps) {
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>('');
+    const [isSignUp, setIsSignUp] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) setUser(user);
+        };
+        getUser();
+    }, [setUser]);
+
+    const handleAuthSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError(null);
+
+        const response = isSignUp
+            ? await supabase.auth.signUp({ email, password })
+            : await supabase.auth.signInWithPassword({ email, password });
+
+        if (response.error) {
+            setError(response.error.message);
+        } else if (response.data?.user) {
+            setUser(response.data.user);
+        }
+    };
+
+    const toggleView = () => {
+        setIsSignUp(!isSignUp);
+        setError(null);
+    };
+
+    return (
+        <div className="auth-container">
+            <h1 className="auth-title">{isSignUp ? "Create Account" : "Login"}</h1>
+            {error && <p className="error-message">{error}</p>}
+            <form onSubmit={handleAuthSubmit} className="auth-form">
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="auth-input"
+                />
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="auth-input"
+                />
+                <button type="submit" className="auth-submit-btn">
+                    {isSignUp ? "Sign Up" : "Login"}
+                </button>
+            </form>
+            <button onClick={toggleView} className="toggle-view-btn">
+                {isSignUp ? "Already have an account? Login" : "Don't have an account? Create one"}
+            </button>
+        </div>
+    );
+}
+
+
+-----------
+
+login
+
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase'; // Ensure this path is correct for your project setup
+import { User } from '@supabase/supabase-js';
+import './LoginStyles.css'; // Import your CSS file here
+
+
+interface LoginProps {
+    setUser: React.Dispatch<React.SetStateAction<null | User>>;
+}
+
+export default function Login({ setUser }: LoginProps) {
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>('');
+    const [isSignUp, setIsSignUp] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) setUser(user);
+        };
+        getUser();
+    }, [setUser]);
+
+    const handleAuthSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError(null);
+
+        const response = isSignUp
+            ? await supabase.auth.signUp({ email, password })
+            : await supabase.auth.signInWithPassword({ email, password });
+
+        if (response.error) {
+            setError(response.error.message);
+        } else if (response.data?.user) {
+            setUser(response.data.user);
+        }
+    };
+
+    const toggleView = () => {
+        setIsSignUp(!isSignUp);
+        setError(null);
+    };
+
+    return (
+        <div className="auth-container">
+            <h1 className="auth-title">{isSignUp ? "Create Account" : "Login"}</h1>
+            {error && <p className="error-message">{error}</p>}
+            <form onSubmit={handleAuthSubmit} className="auth-form">
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="auth-input"
+                />
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="auth-input"
+                />
+                <button type="submit" className="auth-submit-btn">
+                    {isSignUp ? "Sign Up" : "Login"}
+                </button>
+            </form>
+            <button onClick={toggleView} className="toggle-view-btn">
+                {isSignUp ? "Already have an account? Login" : "Don't have an account? Create one"}
+            </button>
+        </div>
+    );
+}
+
+
+---------------
+
+
+
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
+import React, { useEffect, useState } from "react";
+import { SaveIcon } from "./Icons/Save";
+import { DeleteIcon } from "./Icons/Delete";
+import { EditIcon } from "./Icons/Edit";
+
+interface DashboardProps {
+    user: User;
+    setUser: React.Dispatch<React.SetStateAction<null | User>>;
+}
+
+export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
+    const [links, setLinks] = useState<{ created_at: string; id: number; link: string; }[]>([]);
+    const [edit, setEdit] = useState<number>(-1);
+
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.log(error);
+        else setUser(null);
+    };
+
+    const handleAdd = async () => {
+        const { data, error } = await supabase.from('links').insert([{ link: 'https://google.com', email: user.email }]).select();
+        if (error) console.log(error);
+        if (data) setLinks([...links, ...data]);
+    };
+
+    useEffect(() => {
+        const getLinks = async () => {
+            const { data, error } = await supabase
+                .from('links')
+                .select('*')
+                .eq('email', user?.email);
+
+            if (error) console.log(error);
+            if (data && data?.length > 0) setLinks(data);
+        };
+
+        getLinks();
+    }, [user]);
+
+    return (
+        <div className="dashboard-container">
+            <h1 className="dashboard-title">Link Manager</h1>
+            <p className="dashboard-welcome">Welcome, {user?.email}</p>
+
+            <div className="card-container">
+                {links.map((link, index) => (
+                    <div key={link.id} className="neumorphic-card">
+                        <img src="/card.svg" alt="Card" className="card-icon" />
+                        <h5 className="card-title">ID: #{link.id}</h5>
+                        <div className="card-text">
+                            {edit === index ? (
+                                <input
+                                    className="edit-input"
+                                    type="text"
+                                    value={link.link}
+                                    onChange={(e) => setLinks(links.map((l, i) => i === index ? { ...l, link: e.target.value } : l))}
+                                />
+                            ) : (
+                                <p>{link.link}</p>
+                            )}
+                        </div>
+                        <div className="card-actions">
+                            {edit === index ? (
+                                <React.Fragment>
+                                    <button className="save-button" onClick={() => {
+                                        setEdit(-1);
+                                        const updateLink = async () => {
+                                            const { error } = await supabase.from('links').update({ link: link.link }).match({ id: link.id });
+                                            if (error) console.log(error);
+                                        };
+                                        updateLink();
+                                    }}>
+                                        <SaveIcon />
+                                    </button>
+                                    <button className="cancel-button" onClick={() => setEdit(-1)}>
+                                        <DeleteIcon />
+                                    </button>
+                                </React.Fragment>
+                            ) : (
+                                <React.Fragment>
+                                    <button className="edit-button" onClick={() => setEdit(index)}>
+                                        <EditIcon />
+                                    </button>
+                                    <button className="delete-button" onClick={() => {
+                                        const deleteLink = async () => {
+                                            const { error } = await supabase.from('links').delete().match({ id: link.id });
+                                            if (error) console.log(error);
+                                            else setLinks(links.filter((l, i) => i !== index));
+                                        };
+                                        deleteLink();
+                                    }}>
+                                        <DeleteIcon />
+                                    </button>
+                                </React.Fragment>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <button className="add-link-button" onClick={handleAdd}>
+                Add Link
+            </button>
+        </div>
+    );
+}
+
+
+
+----
+
+
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
+import React, { useEffect, useState } from "react";
+import { SaveIcon } from "./Icons/Save";
+import { DeleteIcon } from "./Icons/Delete";
+import { EditIcon } from "./Icons/Edit";
+
+interface DashboardProps {
+    user: User;
+    setUser: React.Dispatch<React.SetStateAction<null | User>>;
+}
+
+export default function Dashboard({ user, setUser }: Readonly<DashboardProps>) {
+    const [links, setLinks] = useState<{ created_at: string; id: number; link: string; }[]>([]);
+    const [edit, setEdit] = useState<number>(-1);
+
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.log(error);
+        else setUser(null);
+    };
+
+    const handleAdd = async () => {
+        const { data, error } = await supabase.from('links').insert([{ link: 'https://google.com', email: user.email }]).select();
+        if (error) console.log(error);
+        if (data) setLinks([...links, ...data]);
+    };
+
+    useEffect(() => {
+        const getLinks = async () => {
+            const { data, error } = await supabase
+                .from('links')
+                .select('*')
+                .eq('email', user?.email);
+
+            if (error) console.log(error);
+            if (data && data?.length > 0) setLinks(data);
+        };
+
+        getLinks();
+    }, [user]);
+
+    return (
+        <div className="dashboard-container">
+            <h1 className="text-5xl text-emerald-200 font-bold text-center">Link Manager</h1>
+            <p className="mt-4 text-emerald-200 text-center text-xl">Welcome, {user?.email}</p>
+
+            <div className="card-container">
+                {links.map((link, index) => (
+                    <div key={link.id} className="neumorphic-card">
+                        <img src="/card.svg" alt="Card" className="card-icon" />
+                        <h5 className="card-title">ID: #{link.id}</h5>
+                        <div className="card-text">
+                            {edit === index ? (
+                                <input
+                                    className="edit-input px-4 py-2 border-2 text-emerald-400 placeholder-emerald-600 bg-emerald-950 border-emerald-900 rounded-md focus:outline-none focus:ring-2 focus:border-transparent"
+                                    type="text"
+                                    value={link.link}
+                                    onChange={(e) => setLinks(links.map((l, i) => i === index ? { ...l, link: e.target.value } : l))}
+                                />
+                            ) : (
+                                <p>{link.link}</p>
+                            )}
+                        </div>
+                        <div className="card-actions">
+                            {edit === index ? (
+                                <React.Fragment>
+                                    <button className="save-button" onClick={() => {
+                                        setEdit(-1);
+                                        const updateLink = async () => {
+                                            const { error } = await supabase.from('links').update({ link: link.link }).match({ id: link.id });
+                                            if (error) console.log(error);
+                                        };
+                                        updateLink();
+                                    }}>
+                                        <SaveIcon />
+                                    </button>
+                                    <button className="cancel-button" onClick={() => setEdit(-1)}>
+                                        <DeleteIcon />
+                                    </button>
+                                </React.Fragment>
+                            ) : (
+                                <React.Fragment>
+                                    <button className="edit-button" onClick={() => setEdit(index)}>
+                                        <EditIcon />
+                                    </button>
+                                    <button className="delete-button" onClick={() => {
+                                        const deleteLink = async () => {
+                                            const { error } = await supabase.from('links').delete().match({ id: link.id });
+                                            if (error) console.log(error);
+                                            else setLinks(links.filter((l, i) => i !== index));
+                                        };
+                                        deleteLink();
+                                    }}>
+                                        <DeleteIcon />
+                                    </button>
+                                </React.Fragment>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <button className="add-link-button mt-6 w-full py-3 bg-emerald-400 text-emerald-950 font-bold rounded-md focus:outline-none focus:ring-2 focus:border-transparent" onClick={handleAdd}>
+                Add Link
+            </button>
+        </div>
+    );
+}
