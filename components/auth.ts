@@ -3,9 +3,10 @@ import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
 export async function checkUserSession(): Promise<User | null> {
-  const { user } = await supabase.auth.session();
-  return user;
+  const session = supabase.auth.session;
+  return session?.user ?? null;
 }
+
 
 export async function signIn(email: string, password: string) {
   const { user, error } = await supabase.auth.signIn({ email, password });
@@ -18,4 +19,5 @@ export async function signIn(email: string, password: string) {
 export async function signOut() {
   await supabase.auth.signOut();
 }
+
 
